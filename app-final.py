@@ -640,7 +640,7 @@ with Blocks(
             state
         ],
         outputs=[out_gen_1, out_gen_2, state],
-        queue=True
+        queue=False
     )
     sketch_pad_resize_trigger.change(
         None,
@@ -678,6 +678,6 @@ with Blocks(
     refresh_inf.click(Dropdown_list2, inputs=None, outputs=model_path)
     load_file.click(Dropdown_list2, inputs = None, outputs = file_name)
 
-main.queue(concurrency_count=5, max_size=20).launch(share=True, debug = True, show_error=True)
+main.launch(share=True, debug = True, show_error=True)
 
 
