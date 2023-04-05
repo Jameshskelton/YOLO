@@ -142,37 +142,36 @@ def auto_append_grounding(language_instruction, grounding_texts):
 def slice_per(source, step):
     return [source[i::step] for i in range(step)]
 
-def generate(task, name, name2, split, grounding_texts, sketch_pad,
+def generate(task, dir_name, split, grounding_texts, sketch_pad,
              alpha_sample, guidance_scale, batch_size,
              fix_seed, rand_seed, use_actual_mask, append_grounding, style_cond_image,
              state):
-    print(task, name, name2, split, grounding_texts)
-    name = name2
-    if os.path.isdir(name) == False:
+    print(task, dir_name, split, grounding_texts)
+    if os.path.isdir(dir_name) == False:
         try:
             subprocess.run(['mkdir',f'{name}'])
         except:
             None
-        subprocess.run(['mkdir',f'datasets/{name}/'])
-        subprocess.run(['mkdir',f'datasets/{name}/test'])
-        subprocess.run(['mkdir',f'datasets/{name}/test/labels'])
-        subprocess.run(['mkdir',f'datasets/{name}/test/images'])
-        subprocess.run(['mkdir',f'datasets/{name}/valid'])
-        subprocess.run(['mkdir',f'datasets/{name}/valid/labels'])
-        subprocess.run(['mkdir',f'datasets/{name}/valid/images'])
-        subprocess.run(['mkdir',f'datasets/{name}/train'])
-        subprocess.run(['mkdir',f'datasets/{name}/train/labels'])
-        subprocess.run(['mkdir',f'datasets/{name}/train/images'])
-        subprocess.run(['touch', f'datasets/{name}/data.yaml'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/test'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/test/labels'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/test/images'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/valid'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/valid/labels'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/valid/images'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/train'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/train/labels'])
+        subprocess.run(['mkdir',f'datasets/{dir_name}/train/images'])
+        subprocess.run(['touch', f'datasets/{dir_name}/data.yaml'])
         # subprocess.run(['cp','-r',f'datasets/{name}/', 'datasets/datasets/'])
 
 
-        make_yaml(name, *grounding_texts.split(';'))
-    num = len(os.listdir(f'datasets/{name}/{split}/images'))
+        make_yaml(dir_name, *grounding_texts.split(';'))
+    num = len(os.listdir(f'datasets/{dir_name}/{split}/images'))
     image = state.get('original_image', sketch_pad['image']).copy()
     image = center_crop(image)
     image = Image.fromarray(image)
-    image.save(f'datasets/{name}/{split}/images/{name}-{num}.png')
+    image.save(f'datasets/{dir_name}/{split}/images/{dir_name}-{num}.png')
     if 'boxes' not in state:
         state['boxes'] = []
 
@@ -194,9 +193,9 @@ Please draw boxes accordingly on the sketch pad.""".format(len(boxes), len(groun
         
         grounding_instruction[obj].append(box)
     g_i = dict(grounding_instruction)
-    with open(f'{name}/data.yaml', 'r') as file:
+    with open(f'{dir_name}/data.yaml', 'r') as file:
         confi = yaml.safe_load(file)
-        with open(f'datasets/{name}/{split}/labels/{name}-{num}.txt', 'w') as f:
+        with open(f'datasets/{dir_name}/{split}/labels/{dir_name}-{num}.txt', 'w') as f:
             for i in list(g_i.keys()):
                 if len(g_i[i])>1:
                     for box in g_i[i]:
@@ -210,16 +209,15 @@ Please draw boxes accordingly on the sketch pad.""".format(len(boxes), len(groun
 
 
 
-def train(name, name2, epochs, model_type, model_type2, prog = gr.Progress()):
-    # Load a model
-    if name == '':
-        name = name2
-    if model_type == '':
-        model_type = model_type2
+def train(tr_name, epochs, model_type, batch_size):
+
+    model_dict = {'YOLOv8n':'yolov8n', 'YOLOv8s':'yolov8s', 'YOLOv8m':'yolov8m', 'YOLOv8l':'yolov8l', 'YOLOv8x':'yolov8x'}
+    model_type = model_dict[model_type]
+    print(tr_name, epochs, model_type)
     model = YOLO(f"{model_type}.yaml")  # build a new model from scratch
     model = YOLO(f"{model_type}.pt")  # load a pretrained model (recommended for training)
     
-    model.train(data=f"{name}/data.yaml", epochs=epochs, verbose = True)
+    model.train(data=f"{tr_name}/data.yaml", epochs=epochs, verbose = True, batch = batch_size)
     
     #     yield pd.read_csv('runs/detect/train28.csv')
     metrics = model.val()  # evaluate model performance on the validation set
@@ -231,8 +229,10 @@ def train(name, name2, epochs, model_type, model_type2, prog = gr.Progress()):
 # ###im = Image.fromarray(np.uint8((test[0].plot())*255))
 
 def infer(model_path, model_type, img):
+    model_dict = {'YOLOv8n':'yolov8n', 'YOLOv8s':'yolov8s', 'YOLOv8m':'yolov8m', 'YOLOv8l':'yolov8l', 'YOLOv8x':'yolov8x'}
+    model_type = model_dict[model_type]
     model = YOLO(f"{model_type}.yaml")  # build a new model from scratch
-    model = YOLO(f"{model_path}.pt")  #load your pretrained model (recommended for training)
+    model = YOLO(f"runs/detect/{model_path}/weights/best.pt")  #load your pretrained model (recommended for training)
     test = model.predict(img)
     
     return test[0].plot(), test
@@ -371,6 +371,13 @@ def clear(task, sketch_pad_trigger, batch_size, state, switch_task=False):
     state = {}
     return [None, sketch_pad_trigger, None, 1.0] + out_images + [state]
 
+def Dropdown_list():
+    new_options =  sorted(os.listdir('datasets/'))
+    return gr.Dropdown.update(choices=new_options)
+def Dropdown_list2():
+    new_options =  sorted(os.listdir('runs/detect'))
+    return gr.Dropdown.update(choices=new_options)
+
 css = """
 #img2img_image, #img2img_image > .fixed-height, #img2img_image > .fixed-height > div, #img2img_image > .fixed-height > div > img
 {
@@ -406,14 +413,33 @@ with Blocks(
     analytics_enabled=False,
     title="YOLOv8 Gradio demo",
 ) as main:
-    description = """
+    description_label = """
     <p style="text-align: center; font-weight: bold;">
         <span style="font-size: 28px">YOLOv8 Gradio demo</span>
         <br>
+        This tab allows you to label images with drawings! The sketchpad will automatically detect and 
+        compute the bounding box locations, and create a labels file with the corresponding label ID and bounding box 
+        coordinates. If no folder exists corresponding to the name input, it will generate a new set of folders and a
+        `data.yaml` file with the labels enterred in the order submitted. Labels can be repeated.  
     </p>
     """
-    gr.HTML(description)
+    description_train = """
+    <p style="text-align: center; font-weight: bold;">
+        <span style="font-size: 28px">YOLOv8 Gradio demo</span>
+        <br>
+        Now that we have labeled our images, we can train our model! Select the model type, batch size, and the number of epochs you would like to train for, and click the Generate button to run training.  
+    </p>
+    """
+    description_inf = """
+    <p style="text-align: center; font-weight: bold;">
+        <span style="font-size: 28px">YOLOv8 Gradio demo</span>
+        <br>
+        This tab can be used to run predictions on photos from our computer using the model we just trained. 
+    </p>
+    """
     with gr.Tab("Label Images"):
+        print('lab')
+        gr.HTML(description_label)
         with gr.Row():
             with gr.Column(scale=4):
                 sketch_pad_trigger = gr.Number(value=0, visible=False)
@@ -428,11 +454,8 @@ with Blocks(
                     value="Grounded Inpainting",
                     label="Task", visible = False
                 )
-                name = gr.Textbox(
-                    label = 'name of directory holding files', visible = False
-                )
-                name2 = gr.Textbox(
-                    label = 'Name of directory holding files'
+                dir_name= gr.Textbox(
+                    label = 'name of directory holding files'
                 )
                 split = gr.Radio(label='Which image split does this image fall into?', choices = ['train','test','valid'], value = 'train')
                 grounding_instruction = gr.Textbox(
@@ -468,33 +491,60 @@ with Blocks(
                     out_gen_4 = gr.Image(type="pil", visible=False, show_label=False)
 
             state = gr.State({})
+            
+        with gr.Row():
+            gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
         
             
 
             
     with gr.Tab('Train'):
+        print('train')
+        gr.HTML(description_train)
         with gr.Row():
-            name = gr.Textbox(label = 'Directory name', visible = False)
-            name2 = gr.Textbox(label = 'Directory name')
-            epochs = gr.Slider(label = "Number of epochs", value = 1, max = 1000)
-            model_type = gr.Radio(label = "Model type", choices = ['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x'], visible = False)
-            model_type2 = gr.Radio(label = "Model type", choices = ['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x'])
-        with gr.Row():
+            with gr.Column():
+                tr_name = gr.Dropdown(choices = sorted(os.listdir('datasets/')), label = 'Directory name')
+                refresh_tr = gr.Button(value = 'Click to refresh dataset list')
+
+            tr_model_type = gr.Radio(label = "Model type", choices = ['YOLOv8n', 'YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x'], visible =True)
+            with gr.Column():
+                epochs = gr.Slider(label = "Number of epochs", value = 1, max = 1000)
+                batch_size = gr.Slider(value = 1, minimum = 0, maximum = 128, step = 1, label = 'Batch Size')
+
+        with gr.Column():
             train_btn = gr.Button(value = 'Train')
         with gr.Row():
             prog = gr.Textbox(label = 'Training progress', visible = False)
-            df = gr.Dataframe(label = 'Final training metrics')
+            df = gr.Dataframe(label = 'Final training metrics', headers = [ 'metrics/precision(B)','metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)', 'fitness'])
+        with gr.Row():
+            file_name = gr.Dropdown(choices = sorted(os.listdir('runs/detect/')), label = 'Select the model to download')
+            file_obj = gr.File(label="Output file")
+        with gr.Column():
+            load_file = gr.Button('Load file')
+            
+
+        with gr.Row():
+            gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
                          
     with gr.Tab('Inference'):
+        print('inf')
+        gr.HTML(description_inf)
         with gr.Row():
-            model_path = gr.Textbox(label = 'Path to the pretrained model')
-            model_type = gr.Radio(label = "Model type", choices = ['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x'])
+            with gr.Column():
+                model_path = gr.Dropdown(label = 'Path to model', choices = sorted(os.listdir('runs/detect/')))
+                refresh_inf = gr.Button(value = 'Click to refresh dataset list')
+ 
+            inf_model_type = gr.Radio(label = "Model type", choices = ['YOLOv8n', 'YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x'])
             img = gr.Image(label = 'Input image', interactive = True)
+        with gr.Row():
             inf_btn = gr.Button(label = 'Run inference on image')
         with gr.Row():
+            outybox = gr.Textbox(label = 'Full output (metrics, boxes, etc.)')
             out_inf_img = gr.Image(label = 'Output image', type = 'pil') 
-            outybox = gr.Textbox(label = 'Full output')
-                      
+            
+        with gr.Row():
+            gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
+
         
 
     class Controller:
@@ -582,7 +632,7 @@ with Blocks(
     gen_btn.click(
         generate,
         inputs=[
-            task, name, name2, split, grounding_instruction, sketch_pad,
+            task, dir_name, split, grounding_instruction, sketch_pad,
             alpha_sample, guidance_scale, batch_size,
             fix_seed, rand_seed,
             use_actual_mask,
@@ -616,15 +666,18 @@ with Blocks(
         queue=False)
     train_btn.click(
         train,
-        inputs=[name, name2, epochs, model_type, model_type2],
+        inputs=[tr_name, epochs, tr_model_type, batch_size],
         outputs=[df],
-        queue=True)
+        queue=False)
     inf_btn.click(
         infer,
-        inputs = [model_path, model_type, img],
+        inputs = [model_path, inf_model_type, img],
         outputs = [out_inf_img, outybox],
-        queue = True)
+        queue =False)
+    refresh_tr.click(Dropdown_list, inputs=None, outputs=tr_name)
+    refresh_inf.click(Dropdown_list2, inputs=None, outputs=model_path)
+    load_file.click(Dropdown_list2, inputs = None, outputs = file_name)
 
-main.queue(concurrency_count=5, max_size=20).launch(share=True, show_api=False, show_error=True)
+main.queue(concurrency_count=5, max_size=20).launch(share=True, debug = True, show_error=True)
 
 
