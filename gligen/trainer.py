@@ -15,7 +15,7 @@ import torchvision
 import math
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
-# from distributed import get_rank, synchronize, get_world_size
+from distributed import get_rank, synchronize, get_world_size
 from transformers import get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
 from copy import deepcopy
 try:

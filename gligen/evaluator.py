@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import  DistributedSampler
 import os 
 from tqdm import tqdm
-# from distributed import get_rank, synchronize, get_world_size
-# from trainer import read_official_ckpt, batch_to_device, ImageCaptionSaver, wrap_loader #, get_padded_boxes
+from distributed import get_rank, synchronize, get_world_size
+from trainer import read_official_ckpt, batch_to_device, ImageCaptionSaver, wrap_loader #, get_padded_boxes
 from PIL import Image
 import math
 import json
@@ -122,7 +122,14 @@ class Evaluator:
         if config.to256:
             self.outdir_real256 = os.path.join(self.outdir,'real256')
             self.outdir_fake256 = os.path.join(self.outdir,'fake256')
-
+        synchronize() # if rank0 is faster, it may mkdir before the other rank call os.listdir()
+        if get_rank() == 0:
+            os.makedirs(self.outdir, exist_ok=True)
+            os.makedirs(self.outdir_real, exist_ok=True)
+            os.makedirs(self.outdir_fake, exist_ok=True)
+            if config.to256:
+                os.makedirs(self.outdir_real256, exist_ok=True)
+                os.makedirs(self.outdir_fake256, exist_ok=True)
         print(self.outdir) # double check 
 
         self.evaluation_finished = False

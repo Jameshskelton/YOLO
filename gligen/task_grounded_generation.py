@@ -9,7 +9,7 @@ from transformers import CLIPProcessor, CLIPModel
 from copy import deepcopy
 import torch 
 from ldm.util import instantiate_from_config
-# from trainer import read_official_ckpt, batch_to_device
+from trainer import read_official_ckpt, batch_to_device
 from evaluator import set_alpha_scale, save_images, draw_masks_from_boxes
 import numpy as np
 import clip 
@@ -182,7 +182,7 @@ def fire_clip(text_encoder, meta, batch=1, max_objs=30, clip_model=None):
         "text_embeddings"  : text_embeddings.unsqueeze(0).repeat(batch,1,1),
         "image_embeddings" : image_embeddings.unsqueeze(0).repeat(batch,1,1)
     }
-    return out
+    return batch_to_device(out, device) 
 
 
 
