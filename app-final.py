@@ -228,33 +228,31 @@ def train(tr_name, epochs, model_type, batch_size):
 
 from PIL import Image
 def infer(model_path, model_type, img, vid, url):
-    
     print(model_path, inf_model_type, img, vid, url)
     model_dict = {'YOLOv8n':'yolov8n', 'YOLOv8s':'yolov8s', 'YOLOv8m':'yolov8m', 'YOLOv8l':'yolov8l', 'YOLOv8x':'yolov8x'}
     model_type = model_dict[model_type]
     model = YOLO(f"{model_type}.yaml")  # build a new model from scratch
     model = YOLO(f"runs/detect/{model_path}/weights/best.pt")  #load your pretrained model (recommended for training)
     #print(model_path, model_type, img,vid
-    if vid ==None and img == None:
-        results = model.predict(vid)
+    if url != '':
+        results = model.predict(url)
         lst = []
         for i in range(len(results)):
-             res_plotted = cv2.cvtColor(results[i].plot(), cv2.COLOR_BGR2RGB)
-    #         res_plotted = results[i].plot()
+    #         res_plotted = cv2.cvtColor(results[i].plot(), cv2.COLOR_BGR2RGB)
+             res_plotted = results[i].plot()
              lst.append((res_plotted))
         frameSize = PIL.Image.fromarray(lst[0]).size
         out = cv2.VideoWriter('output_video.mp4',cv2.VideoWriter_fourcc(*'DIVX'), 30, frameSize)
 
         for i in lst:
             out.write(i)
-
         out.release()
         return None, 'output_video.mp4', results
-    elif vid ==None:
-       # print('img?')
+    elif img[0][0][0] != None:
+        img = Image.fromarray(img)    
         test = model.predict(img)
         return test[0].plot(), None, test
-    elif img == None:
+    elif vid != None:
         results = model.predict(vid)
         lst = []
         for i in range(len(results)):
@@ -551,6 +549,7 @@ with Blocks(
             with gr.Column(scale=4):
                 with gr.Row():
                     sketch_pad = ImageMask(label="Input image", elem_id="img2img_image")
+                with gr.Row():    
                     out_imagebox = gr.Image(type="pil", label="Annotated image")
                 with gr.Row():
                     clear_btn = gr.Button(value='Clear sketchpads')
@@ -608,13 +607,13 @@ with Blocks(
             load_file = gr.Button('Load file')
         with gr.Row():
             gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
-                         
+                        
     with gr.Tab('Inference'):
         print('inf')
         gr.HTML(description_inf)
         with gr.Row():
             with gr.Column():
-                model_path = gr.Dropdown(label = 'Path to model', choices = sorted(os.listdir('runs/detect/')))
+                model_path = gr.Dropdown(value = 'train', label = 'Path to model', choices = sorted(os.listdir('runs/detect/')))
                 refresh_inf = gr.Button(value = 'Click to refresh model list')
                 inf_model_type = gr.Radio(value = 'YOLOv8n', label = "Model type", choices = ['YOLOv8n', 'YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x'])
             with gr.Column():   
@@ -664,7 +663,7 @@ with Blocks(
             image = state['original_image'].copy()
             inpaint_hw = int(0.9 * min(*image.shape[:2]))
             state['inpaint_hw'] = inpaint_hw
-            image_mask = sized_center_mask(image, inpaint_hw, inpaint_hw)
+            image_mask = sized_center_mask(image, image.shape[1], image.shape[0])
             state['masked_image'] = image_mask.copy()
             # print(f'mask triggered {self.resizes}')
             return image_mask, state
