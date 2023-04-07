@@ -6,8 +6,8 @@ This Gradio application is designed to facilitate the end-to-end creation of a Y
 
 ## Capabilities
 
-- **Label images**: this tab lets you upload images, either in bulk or one at a time, to be labeled. The bounding boxes are automatically detected, and the labels are assigned through a textbox. Entries are separated by semi-colons
-- **View images**: this tab allows us to view our labeled images, seperated by the assigned training split
+- **Label Images**: this tab lets you upload images, either in bulk or one at a time, to be labeled. The bounding boxes are automatically detected, and the labels are assigned through a textbox. Entries are separated by semi-colons
+- **Image Gallery**: this tab allows us to view our labeled images, seperated by the assigned training split
 - **Train**: train any of the YOLOv8 models on the labeled images. Outputs the validation metrics and the best trained model from the run, `best.pt`
 - **Inference**: predict object labels on images and videos. Works for direct upload and URL submission
 
