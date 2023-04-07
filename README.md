@@ -1,4 +1,4 @@
-# YOLOv8 Web Ui
+# YOLOv8 Web UI
 
 [![Gradient](https://assets.paperspace.io/img/gradient-badge.svg)](https://console.paperspace.com/github/gradient-ai/yolo/blob/master/YOLO.ipynb?machine=Free-GPU)
 
