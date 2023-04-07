@@ -31,6 +31,7 @@ from PIL import Image
 import numpy as np
 from matplotlib import cm
 import sys
+import PIL
 sys.tracebacklimit = 0
 
 def make_yaml(name, *cat):
@@ -221,22 +222,53 @@ def train(tr_name, epochs, model_type, batch_size):
     
     #     yield pd.read_csv('runs/detect/train28.csv')
     metrics = model.val()  # evaluate model performance on the validation set
-    success = model.export(format="onnx")  # export the model to ONNX format
-    return pd.DataFrame.from_dict([metrics.results_dict])
+    #success = model.export(format="onnx")  # export the model to ONNX format
+    return pd.DataFrame.from_dict([metrics.results_dict]), model.trainer.best
 
-# ###test = model.predict('/notebooks/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvcHUyMzMxNzg4LWltYWdlLXJtNTAzLTAxXzEtbDBqOXFyYzMucG5n copy.png')
 
-# ###im = Image.fromarray(np.uint8((test[0].plot())*255))
-
-def infer(model_path, model_type, img):
+from PIL import Image
+def infer(model_path, model_type, img, vid, url):
+    
+    print(model_path, inf_model_type, img, vid, url)
     model_dict = {'YOLOv8n':'yolov8n', 'YOLOv8s':'yolov8s', 'YOLOv8m':'yolov8m', 'YOLOv8l':'yolov8l', 'YOLOv8x':'yolov8x'}
     model_type = model_dict[model_type]
     model = YOLO(f"{model_type}.yaml")  # build a new model from scratch
     model = YOLO(f"runs/detect/{model_path}/weights/best.pt")  #load your pretrained model (recommended for training)
-    test = model.predict(img)
-    
-    return test[0].plot(), test
+    #print(model_path, model_type, img,vid
+    if vid ==None and img == None:
+        results = model.predict(vid)
+        lst = []
+        for i in range(len(results)):
+             res_plotted = cv2.cvtColor(results[i].plot(), cv2.COLOR_BGR2RGB)
+    #         res_plotted = results[i].plot()
+             lst.append((res_plotted))
+        frameSize = PIL.Image.fromarray(lst[0]).size
+        out = cv2.VideoWriter('output_video.mp4',cv2.VideoWriter_fourcc(*'DIVX'), 30, frameSize)
 
+        for i in lst:
+            out.write(i)
+
+        out.release()
+        return None, 'output_video.mp4', results
+    elif vid ==None:
+       # print('img?')
+        test = model.predict(img)
+        return test[0].plot(), None, test
+    elif img == None:
+        results = model.predict(vid)
+        lst = []
+        for i in range(len(results)):
+             #res_plotted = cv2.cvtColor(results[i].plot(), cv2.COLOR_BGR2RGB)
+             res_plotted = results[i].plot()
+             lst.append((res_plotted))
+        frameSize = PIL.Image.fromarray(lst[0]).size
+        out = cv2.VideoWriter('output_video.mp4',cv2.VideoWriter_fourcc(*'DIVX'), 30, frameSize)
+
+        for i in lst:
+            out.write(i)
+
+        out.release()
+        return None, 'output_video.mp4', results
 def binarize(x):
     return (x != 0).astype('uint8') * 255
 
@@ -367,7 +399,7 @@ def clear(task, sketch_pad_trigger, batch_size, state, switch_task=False):
     blank_samples = batch_size % 2 if batch_size > 1 else 0
     out_images = [gr.Image.update(value=None, visible=True) for i in range(batch_size)] \
                     + [gr.Image.update(value=None, visible=True) for _ in range(blank_samples)] \
-                    + [gr.Image.update(value=None, visible=False) for _ in range(4 - batch_size - blank_samples)]
+                    + [gr.Image.update(value=None, visible=True) for _ in range(4 - batch_size - blank_samples)]
     state = {}
     return [None, sketch_pad_trigger, None, 1.0] + out_images + [state]
 
@@ -377,7 +409,39 @@ def Dropdown_list():
 def Dropdown_list2():
     new_options =  sorted(os.listdir('runs/detect'))
     return gr.Dropdown.update(choices=new_options)
+def get_model(file_name):
+    return f'runs/detect/{file_name}/weights/best.pt'
+def on_select(evt: gr.SelectData):  # SelectData is a subclass of EventData   
+    return evt.value
+def regurg(inp):
+    return os.listdir(inp)
+def regurg2(evt: gr.SelectData):  # SelectData is a subclass of EventData
+    outy = os.listdir(f'datasets/{evt.value}/train/images/')
+    lst = []
+    for i in outy:
+        lst.append(f'datasets/{evt.value}/train/images/'+i)
+    return lst
+def regurg3(evt: gr.SelectData):
+    lst =[]
+    for i in os.listdir(f'datasets/{evt.value}/valid/images/'):
+        lst.append(f'datasets/{evt.value}/valid/images/'+i)
+    return lst
+def select_inp_type(choice):
+    print(choice)
+    if choice =='Video':
+        return gr.Image.update(visible = True), gr.Video.update(visible = False), gr.Image.update(visible = True), gr.Video.update(visible = False)
+    elif choice =='Image':
+        return gr.Image.update(visible = False), gr.Video.update(visible = True), gr.Image.update(visible = False), gr.Video.update(visible = True)
+def select_upload_types(choice):
+    if choice == 'Single uploads':
+        return gr.File.update(visible = True), gr.Dropdown.update(visible = True), gr.Button.update(visible=True)
+    elif choice == 'Upload bulk':
+        return gr.File.update(visible = False), gr.Dropdown.update(visible = False), gr.Button.update(visible=False)
+def refresh_img_select(files):
+    return [file.name for file in files]
 
+def fix():
+    return gr.Image.update(visible= False), gr.Image.update(visible=False)
 css = """
 #img2img_image, #img2img_image > .fixed-height, #img2img_image > .fixed-height > div, #img2img_image > .fixed-height > div > img
 {
@@ -414,25 +478,34 @@ with Blocks(
     title="YOLOv8 Gradio demo",
 ) as main:
     description_label = """
-    <p style="text-align: center; font-weight: bold;">
-        <span style="font-size: 28px">YOLOv8 Gradio demo</span>
+    <p style="text-align: center;">
+        <span style="font-size: 28px; font-weight: bold;">YOLOv8 with Gradio: label images</span>
         <br>
-        This tab allows you to label images with drawings! The sketchpad will automatically detect and 
-        compute the bounding box locations, and create a labels file with the corresponding label ID and bounding box 
-        coordinates. If no folder exists corresponding to the name input, it will generate a new set of folders and a
-        `data.yaml` file with the labels enterred in the order submitted. Labels can be repeated.  
+        This tab allows you to label images with drawings! \n
+        The sketchpad will automatically detect and compute the bounding box locations,\n
+        and create a labels file with the corresponding label ID and bounding box coordinates. \n
+        If no folder exists corresponding to the name input, it will generate a new set of folders and a \n
+        `data.yaml` file with the labels enterred in the order submitted. Labels can be repeated.
+    </p>
+    """
+    description_gal = """
+    <p style="text-align: center;">
+        <span style="font-size: 28px; font-weight: bold;">YOLOv8 with Gradio: View image data after labeling</span>
+        <br>
+        This tab can be used to view the photos we have labeled.
     </p>
     """
     description_train = """
-    <p style="text-align: center; font-weight: bold;">
-        <span style="font-size: 28px">YOLOv8 Gradio demo</span>
+    <p style="text-align: center;">
+        <span style="font-size: 28px; font-weight: bold;">YOLOv8 with Gradio: Train your model</span>
         <br>
-        Now that we have labeled our images, we can train our model! Select the model type, batch size, and the number of epochs you would like to train for, and click the Generate button to run training.  
+        Now that we have labeled our images, we can train our model! \n
+        Select the model type, batch size, and the number of epochs you would like to train for, and click the Generate button to run training.  
     </p>
     """
     description_inf = """
-    <p style="text-align: center; font-weight: bold;">
-        <span style="font-size: 28px">YOLOv8 Gradio demo</span>
+    <p style="text-align: center;">
+        <span style="font-size: 28px; font-weight: bold;">YOLOv8 with Gradio: Generate image labels</span>
         <br>
         This tab can be used to run predictions on photos from our computer using the model we just trained. 
     </p>
@@ -447,48 +520,49 @@ with Blocks(
                 init_white_trigger = gr.Number(value=0, visible=False)
                 image_scale = gr.Number(value=0, elem_id="image_scale", visible=False)
                 new_image_trigger = gr.Number(value=0, visible=False)
-
+                dir_name= gr.Textbox(
+                    label = 'Name of directory holding files'
+                )
+                split = gr.Radio(label='Which image split does this image fall into?', choices = ['train','test','valid'], value = 'train')
                 task = gr.Radio(
                     choices=["Grounded Generation", 'Grounded Inpainting'],
                     type="value",
                     value="Grounded Inpainting",
-                    label="Task", visible = False
-                )
-                dir_name= gr.Textbox(
-                    label = 'name of directory holding files'
-                )
-                split = gr.Radio(label='Which image split does this image fall into?', choices = ['train','test','valid'], value = 'train')
-                grounding_instruction = gr.Textbox(
-                    label="Annotations (seperated by semicolon)",
-                )
+                    label="Task", visible = False)
+                grounding_instruction = gr.Textbox(label="Annotations (seperated by semicolon)")
+
+                select_upload_type = gr.Radio(label='Select upload type',choices = ['Upload bulk', 'Single uploads'], value = 'Single uploads')
+                upload_bulk = gr.File(label = 'Input images',file_count = 'multiple', visible = False, interactive = True)
+                select_image = gr.Dropdown(choices = None, label = 'Select image to label', visible = False)
+                refresh_dropdown = gr.Button('Refresh image dropdown', visible = False)
+                with gr.Accordion("Advanced Options", open=False, visible = False):
+                    with gr.Column():
+                        alpha_sample = gr.Slider(minimum=0, maximum=1.0, step=0.1,visible=False, value=0.3, label="Scheduled Sampling (τ)")
+                        guidance_scale = gr.Slider(minimum=0, maximum=50, step=0.5, value=7.5, visible=False, label="Guidance Scale")
+                        batch_size = gr.Slider(minimum=1, maximum=4, step=1, value=2, label="Number of Samples", visible=False)
+                        append_grounding = gr.Checkbox(value=True, label="Append grounding instructions to the caption", visible = False)
+                        use_actual_mask = gr.Checkbox(value=False, label="Use actual mask for inpainting", visible=False)
+                        with gr.Row():
+                            fix_seed = gr.Checkbox(value=True, label="Fixed seed", visible = False)
+                            rand_seed = gr.Slider(minimum=0, maximum=1000, step=1, value=0, label="Seed")
+                        with gr.Row():
+                            use_style_cond = gr.Checkbox(value=False, label="Enable Style Condition", visible = False)
+                            style_cond_image = gr.Image(type="pil", label="Style Condition", interactive=True, visible = False)
+            with gr.Column(scale=4):
                 with gr.Row():
                     sketch_pad = ImageMask(label="Input image", elem_id="img2img_image")
                     out_imagebox = gr.Image(type="pil", label="Annotated image")
                 with gr.Row():
-                    clear_btn = gr.Button(value='Clear')
-                    gen_btn = gr.Button(value='Generate')
+                    clear_btn = gr.Button(value='Clear sketchpads')
+                    gen_btn = gr.Button(value='Generate labels')
 
-                with gr.Accordion("Advanced Options", open=False, visible = False):
-                    with gr.Column():
-                        alpha_sample = gr.Slider(minimum=0, maximum=1.0, step=0.1, value=0.3, label="Scheduled Sampling (τ)")
-                        guidance_scale = gr.Slider(minimum=0, maximum=50, step=0.5, value=7.5, label="Guidance Scale")
-                        batch_size = gr.Slider(minimum=1, maximum=4, step=1, value=2, label="Number of Samples")
-                        append_grounding = gr.Checkbox(value=True, label="Append grounding instructions to the caption")
-                        use_actual_mask = gr.Checkbox(value=False, label="Use actual mask for inpainting", visible=False)
-                        with gr.Row():
-                            fix_seed = gr.Checkbox(value=True, label="Fixed seed")
-                            rand_seed = gr.Slider(minimum=0, maximum=1000, step=1, value=0, label="Seed")
-                        with gr.Row():
-                            use_style_cond = gr.Checkbox(value=False, label="Enable Style Condition")
-                            style_cond_image = gr.Image(type="pil", label="Style Condition", visible=False, interactive=True)
-            with gr.Column(scale=4):
-                gr.HTML('<span style="font-size: 20px; font-weight: bold">Generated Images</span>')
                 with gr.Row():
-                    out_gen_1 = gr.Image(type="pil", visible=True, show_label=False)
+                    out_gen_1 = gr.Image(label = 'Output image', type="pil", visible=False, show_label=True)
                     out_gen_2 = gr.Textbox(visible = True, label = 'YAML Config in dictionary format')
                 with gr.Row():
                     out_gen_3 = gr.Image(type="pil", visible=False, show_label=False)
                     out_gen_4 = gr.Image(type="pil", visible=False, show_label=False)
+                    out_gen_5 = gr.Image(type="pil", visible=False, show_label=False)
 
             state = gr.State({})
             
@@ -496,7 +570,18 @@ with Blocks(
             gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
         
             
-
+    with gr.Tab('Image Gallery'):
+        gr.HTML(description_gal)
+        with gr.Column():
+            with gr.Row():
+                get_img_dir = gr.Dropdown(choices = sorted(os.listdir('datasets/')), label = 'Directory name')
+            with gr.Row():
+                reload_img_dir = gr.Button('Reload image directories')
+                get_gallery = gr.Button('Load images', visible = False)
+        with gr.Row():
+            gallery = gr.Gallery(value = None, label = 'Training images').style(grid=[10], height="auto")
+        with gr.Row():
+            val_gallery = gr.Gallery(label = 'Validation images', value = None).style(grid=[10], height="auto")
             
     with gr.Tab('Train'):
         print('train')
@@ -517,12 +602,10 @@ with Blocks(
             prog = gr.Textbox(label = 'Training progress', visible = False)
             df = gr.Dataframe(label = 'Final training metrics', headers = [ 'metrics/precision(B)','metrics/recall(B)', 'metrics/mAP50(B)', 'metrics/mAP50-95(B)', 'fitness'])
         with gr.Row():
-            file_name = gr.Dropdown(choices = sorted(os.listdir('runs/detect/')), label = 'Select the model to download')
+            file_name = gr.Dropdown(choices = sorted(os.listdir('runs/detect/')), label = 'Select the model to download', interactive = True)
             file_obj = gr.File(label="Output file")
         with gr.Column():
             load_file = gr.Button('Load file')
-            
-
         with gr.Row():
             gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
                          
@@ -532,16 +615,20 @@ with Blocks(
         with gr.Row():
             with gr.Column():
                 model_path = gr.Dropdown(label = 'Path to model', choices = sorted(os.listdir('runs/detect/')))
-                refresh_inf = gr.Button(value = 'Click to refresh dataset list')
- 
-            inf_model_type = gr.Radio(label = "Model type", choices = ['YOLOv8n', 'YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x'])
-            img = gr.Image(label = 'Input image', interactive = True)
+                refresh_inf = gr.Button(value = 'Click to refresh model list')
+                inf_model_type = gr.Radio(value = 'YOLOv8n', label = "Model type", choices = ['YOLOv8n', 'YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x'])
+            with gr.Column():   
+                select_inp = gr.Radio(value = 'Image', choices = ['Image', 'Video'], label = 'Select input type')
+                url = gr.Textbox(label = 'URL for video or image', interactive = True, visible = True)
+                img = gr.Image(label = 'Input image', interactive = True)
+                vid = gr.Video(label = 'Input video', interactive = True, visible = False)
         with gr.Row():
-            inf_btn = gr.Button(label = 'Run inference on image')
+            inf_btn = gr.Button(value = 'Generate label predictions')
         with gr.Row():
-            outybox = gr.Textbox(label = 'Full output (metrics, boxes, etc.)')
-            out_inf_img = gr.Image(label = 'Output image', type = 'pil') 
-            
+            outybox = gr.Textbox(label = 'Full Results output (metrics, boxes, etc.)')
+            with gr.Column():
+                out_inf_img = gr.Image(label = 'Labeled image', type = 'pil') 
+                out_inf_vid = gr.Video(label = 'Labeled video', visible =False)
         with gr.Row():
             gr.Image('assets/logo.png').style(height = 53, width = 125, interactive = False)
 
@@ -667,17 +754,30 @@ with Blocks(
     train_btn.click(
         train,
         inputs=[tr_name, epochs, tr_model_type, batch_size],
-        outputs=[df],
+        outputs=[df, file_obj],
         queue=False)
     inf_btn.click(
         infer,
-        inputs = [model_path, inf_model_type, img],
-        outputs = [out_inf_img, outybox],
+        inputs = [model_path, inf_model_type, img, vid,url],
+        outputs = [out_inf_img, out_inf_vid, outybox],
         queue =False)
+    clear_btn.click(fix, inputs = None, outputs = [out_gen_3, out_gen_4])
     refresh_tr.click(Dropdown_list, inputs=None, outputs=tr_name)
     refresh_inf.click(Dropdown_list2, inputs=None, outputs=model_path)
     load_file.click(Dropdown_list2, inputs = None, outputs = file_name)
-
+    select_upload_type.select(select_upload_types, inputs = select_upload_type, outputs = [upload_bulk, select_image, refresh_dropdown])
+    load_file.click(get_model,inputs = file_name, outputs= file_obj)
+    refresh_dropdown.click(refresh_img_select, inputs = upload_bulk, outputs = select_image)
+    reload_img_dir.click(Dropdown_list, inputs = None, outputs = get_img_dir) 
+    get_img_dir.select(regurg2, None, outputs = gallery)
+    get_img_dir.select(regurg3, None, outputs = val_gallery)
+    get_gallery.click(regurg, inputs = get_img_dir, outputs = gallery)
+    select_image.select(clear, inputs=[task, sketch_pad_trigger, batch_size, state],
+        outputs=[sketch_pad, sketch_pad_trigger, out_imagebox, image_scale, out_gen_1, out_gen_2, out_gen_3, out_gen_4, state],
+        queue=False)
+    select_image.select(on_select, inputs = None, outputs = sketch_pad)
+    select_image.select(fix, inputs = None, outputs = [out_gen_3, out_gen_4])
+    select_inp.select(select_inp_type, inputs = select_inp, outputs = [img, vid, out_inf_img, out_inf_vid])
 main.launch(share=True, debug = True, show_error=True)
 
 
